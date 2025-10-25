@@ -7,6 +7,7 @@ import { ConnectionStatus } from './components/ConnectionStatus';
 import { lineraClient } from './lib/lineraClient';
 import { toast } from 'sonner';
 import { Toaster } from './components/ui/sonner';
+import type { GameRecording } from './lib/GameInputRecorder';
 import "@fontsource/inter";
 
 type GameState = 'menu' | 'playing' | 'gameover' | 'leaderboard';
@@ -17,6 +18,7 @@ function App() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [submittingScore, setSubmittingScore] = useState(false);
   const [gameKey, setGameKey] = useState(0);
+  const [currentRecording, setCurrentRecording] = useState<GameRecording | null>(null);
 
   // Load Press Start 2P font
   useEffect(() => {
@@ -47,8 +49,9 @@ function App() {
     setGameKey(prev => prev + 1); // Force remount of game component
   };
 
-  const handleGameOver = (finalScore: number) => {
+  const handleGameOver = (finalScore: number, recording?: GameRecording) => {
     setScore(finalScore);
+    setCurrentRecording(recording || null);
     setGameState('gameover');
     
     if (walletAddress) {
@@ -58,6 +61,15 @@ function App() {
     } else {
       toast('Game Over!', {
         description: `Score: ${finalScore}`
+      });
+    }
+
+    // Log recording stats if available
+    if (recording) {
+      console.log('[App] Game recording captured:', {
+        inputs: recording.inputs.length,
+        duration: recording.duration,
+        seed: recording.seed
       });
     }
   };
@@ -78,7 +90,17 @@ function App() {
 
     setSubmittingScore(true);
     try {
-      const success = await lineraClient.saveScore(score);
+      // TODO: Upload recording to blob storage and get blob ID
+      // For now, we pass undefined for replayBlobId
+      let replayBlobId: string | undefined;
+      
+      if (currentRecording) {
+        console.log('[App] Submitting score with recording:', currentRecording.inputs.length, 'inputs');
+        // In the next task, we'll implement blob upload here
+        // replayBlobId = await uploadRecordingToBlob(currentRecording);
+      }
+
+      const success = await lineraClient.saveScore(score, replayBlobId);
       
       if (success) {
         toast.success('Score saved on-chain!', {

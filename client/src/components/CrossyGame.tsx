@@ -1,17 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { GameInputRecorder, type GameRecording } from '../lib/GameInputRecorder';
+import { SeededRandom } from '../lib/SeededRandom';
 
 interface CrossyGameProps {
-  onGameOver: (score: number) => void;
+  onGameOver: (score: number, recording?: GameRecording) => void;
   onScoreChange: (score: number) => void;
+  enableRecording?: boolean;
 }
 
-export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
+export function CrossyGame({ onGameOver, onScoreChange, enableRecording = true }: CrossyGameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameStateRef = useRef<any>(null);
+  const recorderRef = useRef<GameInputRecorder>(new GameInputRecorder());
 
   useEffect(() => {
     if (!containerRef.current) return;
+
+    // Initialize seeded RNG for deterministic gameplay
+    const gameSeed = Date.now();
+    const rng = new SeededRandom(gameSeed);
 
     // Game constants
     const zoom = 2;
@@ -100,7 +108,7 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
 
     function Car() {
       const car = new THREE.Group();
-      const color = vehicleColors[Math.floor(Math.random() * vehicleColors.length)];
+      const color = rng.randomElement(vehicleColors);
 
       const main = new THREE.Mesh(
         new THREE.BoxGeometry(60 * zoom, 30 * zoom, 15 * zoom),
@@ -144,7 +152,7 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
 
     function Truck() {
       const truck = new THREE.Group();
-      const color = vehicleColors[Math.floor(Math.random() * vehicleColors.length)];
+      const color = rng.randomElement(vehicleColors);
 
       const base = new THREE.Mesh(
         new THREE.BoxGeometry(100 * zoom, 25 * zoom, 5 * zoom),
@@ -207,7 +215,7 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
       trunk.receiveShadow = true;
       tree.add(trunk);
 
-      const height = treeHeights[Math.floor(Math.random() * treeHeights.length)];
+      const height = rng.randomElement(treeHeights);
 
       const crown = new THREE.Mesh(
         new THREE.BoxGeometry(30 * zoom, 30 * zoom, height * zoom),
@@ -296,7 +304,7 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
 
     function Lane(index: number) {
       const lane: any = { index };
-      lane.type = index <= 0 ? "field" : laneTypes[Math.floor(Math.random() * laneTypes.length)];
+      lane.type = index <= 0 ? "field" : rng.randomElement(laneTypes);
 
       switch (lane.type) {
         case "field":
@@ -309,7 +317,7 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
             const tree = Tree();
             let position;
             do {
-              position = Math.floor(Math.random() * columns);
+              position = rng.randomInt(0, columns);
             } while (lane.occupiedPositions.has(position));
             lane.occupiedPositions.add(position);
             tree.position.x =
@@ -321,7 +329,7 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
         case "car":
         case "truck":
           lane.mesh = Road();
-          lane.direction = Math.random() >= 0.5;
+          lane.direction = rng.randomBoolean();
           const vehicleCount = lane.type === "car" ? 3 : 2;
           const divider = lane.type === "car" ? 2 : 3;
           const occupiedPositions = new Set();
@@ -331,7 +339,7 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
               const vehicle = lane.type === "car" ? Car() : Truck();
               let position;
               do {
-                position = Math.floor((Math.random() * columns) / divider);
+                position = rng.randomInt(0, Math.floor(columns / divider));
               } while (occupiedPositions.has(position));
               occupiedPositions.add(position);
               vehicle.position.x =
@@ -341,7 +349,7 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
               lane.mesh.add(vehicle);
               return vehicle;
             });
-          lane.speed = laneSpeeds[Math.floor(Math.random() * laneSpeeds.length)];
+          lane.speed = rng.randomElement(laneSpeeds);
           break;
       }
 
@@ -421,6 +429,14 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
       camera.position.x = initialCameraPositionX;
       dirLight.position.x = initialDirLightPositionX;
       dirLight.position.y = initialDirLightPositionY;
+
+      // Start recording if enabled
+      if (enableRecording) {
+        // Use the same seed for both recording and RNG to ensure deterministic replay
+        rng.reset(gameSeed);
+        recorderRef.current.start(gameSeed);
+        console.log('[Game] Recording started with seed:', gameSeed);
+      }
     };
 
     initializeValues();
@@ -472,6 +488,12 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
           return;
         if (!stepStartTimestamp) startMoving = true;
       }
+      
+      // Record input if recording is enabled
+      if (enableRecording && recorderRef.current.isRecording()) {
+        recorderRef.current.recordInput(direction as any);
+      }
+      
       moves.push(direction);
     };
 
@@ -598,7 +620,15 @@ export function CrossyGame({ onGameOver, onScoreChange }: CrossyGameProps) {
           const carMaxX = vehicle.position.x + (vehicleLength * zoom) / 2;
           if (chickenMaxX > carMinX && chickenMinX < carMaxX) {
             gameOver = true;
-            onGameOver(currentLane);
+            
+            // Stop recording and pass recording to parent
+            let recording: GameRecording | undefined;
+            if (enableRecording && recorderRef.current.isRecording()) {
+              recording = recorderRef.current.stop(currentLane);
+              console.log('[Game] Recording stopped, inputs:', recording.inputs.length);
+            }
+            
+            onGameOver(currentLane, recording);
           }
         });
       }
