@@ -90,21 +90,17 @@ function App() {
 
     setSubmittingScore(true);
     try {
-      // TODO: Upload recording to blob storage and get blob ID
-      // For now, we pass undefined for replayBlobId
-      let replayBlobId: string | undefined;
-      
+      // Pass the replay data directly to saveScore
+      // The backend will handle blob upload (when SDK is ready)
       if (currentRecording) {
         console.log('[App] Submitting score with recording:', currentRecording.inputs.length, 'inputs');
-        // In the next task, we'll implement blob upload here
-        // replayBlobId = await uploadRecordingToBlob(currentRecording);
       }
 
-      const success = await lineraClient.saveScore(score, replayBlobId);
+      const success = await lineraClient.saveScore(score, currentRecording);
       
       if (success) {
         toast.success('Score saved on-chain!', {
-          description: `Your score of ${score} has been recorded on Linera blockchain`
+          description: `Your score of ${score} has been recorded${currentRecording ? ' with replay data' : ''}`
         });
         
         // Optionally show leaderboard after successful submission

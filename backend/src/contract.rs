@@ -14,7 +14,7 @@ pub enum Message {
     /// Save a player's score
     SaveScore {
         score: u32,
-        replay_blob_id: Option<String>,
+        replay_data: Option<String>, // JSON string of replay data
         timestamp: u64,
     },
     /// Register a player with optional display name
@@ -29,7 +29,7 @@ pub enum Operation {
     /// Save a player's score (triggered by GraphQL mutation)
     SaveScore {
         score: u32,
-        replay_blob_id: Option<String>,
+        replay_data: Option<String>, // JSON string of replay data
         timestamp: u64,
     },
     /// Register a player with optional display name
@@ -46,6 +46,12 @@ pub enum ContractError {
     
     #[error("Invalid score: score must be greater than 0")]
     InvalidScore,
+    
+    #[error("Replay required: high scores must include replay data for verification")]
+    ReplayRequired,
+    
+    #[error("Replay too large: replay data exceeds 1MB limit")]
+    ReplayTooLarge,
     
     #[error("View error: {0}")]
     ViewError(#[from] linera_sdk::views::ViewError),
@@ -80,7 +86,7 @@ impl Contract for CrossyChainContract {
         match operation {
             Operation::SaveScore {
                 score,
-                replay_blob_id,
+                replay_data,
                 timestamp,
             } => {
                 // Reject invalid scores
@@ -102,21 +108,43 @@ impl Contract for CrossyChainContract {
                     .await?
                     .unwrap_or_default();
 
-                // Update high score if this score is better
-                if score > player.high_score {
+                // Check if this is a new high score
+                let is_new_high_score = score > player.high_score;
+                
+                // STRICT VALIDATION: Require replay data for all new high scores
+                // This ensures anti-cheat verification is possible for leaderboard entries
+                if is_new_high_score {
+                    // Replay data is mandatory for high scores
+                    if replay_data.is_none() {
+                        return Err(ContractError::ReplayRequired);
+                    }
+                    
+                    let replay_json = replay_data.unwrap();
+                    
+                    // Validate replay data size (limit to 1MB to prevent state bloat)
+                    const MAX_REPLAY_SIZE: usize = 1_000_000; // 1MB
+                    if replay_json.len() > MAX_REPLAY_SIZE {
+                        return Err(ContractError::ReplayTooLarge);
+                    }
+                    
+                    // Update high score and replay atomically
                     player.high_score = score;
+                    player.replay_data = Some(replay_json);
+                    
+                    // TODO: When Linera SDK blob storage is ready, upload to blob storage:
+                    // let replay_bytes = replay_json.into_bytes();
+                    // let blob_hash = self.runtime.publish_data_blob(replay_bytes).await?;
+                    // player.replay_blob_id = Some(format!("{:?}", blob_hash));
+                    // Then we can remove the replay_data field and use only replay_blob_id
                 }
+                // For non-high scores, we don't update anything related to replays
+                // This preserves the existing high-score replay
 
                 // Increment games played
                 player.games_played += 1;
 
                 // Update last played timestamp
                 player.last_played_at = Some(timestamp);
-
-                // Store replay blob ID if provided
-                if let Some(blob_id) = replay_blob_id {
-                    player.replay_blob_id = Some(blob_id);
-                }
 
                 // Save updated player data
                 self.state.players.insert(&sender, player)?;
@@ -162,7 +190,7 @@ impl Contract for CrossyChainContract {
         match message {
             Message::SaveScore {
                 score,
-                replay_blob_id,
+                replay_data,
                 timestamp,
             } => {
                 // Reject invalid scores
@@ -184,21 +212,43 @@ impl Contract for CrossyChainContract {
                     .await?
                     .unwrap_or_default();
 
-                // Update high score if this score is better
-                if score > player.high_score {
+                // Check if this is a new high score
+                let is_new_high_score = score > player.high_score;
+                
+                // STRICT VALIDATION: Require replay data for all new high scores
+                // This ensures anti-cheat verification is possible for leaderboard entries
+                if is_new_high_score {
+                    // Replay data is mandatory for high scores
+                    if replay_data.is_none() {
+                        return Err(ContractError::ReplayRequired);
+                    }
+                    
+                    let replay_json = replay_data.unwrap();
+                    
+                    // Validate replay data size (limit to 1MB to prevent state bloat)
+                    const MAX_REPLAY_SIZE: usize = 1_000_000; // 1MB
+                    if replay_json.len() > MAX_REPLAY_SIZE {
+                        return Err(ContractError::ReplayTooLarge);
+                    }
+                    
+                    // Update high score and replay atomically
                     player.high_score = score;
+                    player.replay_data = Some(replay_json);
+                    
+                    // TODO: When Linera SDK blob storage is ready, upload to blob storage:
+                    // let replay_bytes = replay_json.into_bytes();
+                    // let blob_hash = self.runtime.publish_data_blob(replay_bytes).await?;
+                    // player.replay_blob_id = Some(format!("{:?}", blob_hash));
+                    // Then we can remove the replay_data field and use only replay_blob_id
                 }
+                // For non-high scores, we don't update anything related to replays
+                // This preserves the existing high-score replay
 
                 // Increment games played
                 player.games_played += 1;
 
                 // Update last played timestamp
                 player.last_played_at = Some(timestamp);
-
-                // Store replay blob ID if provided
-                if let Some(blob_id) = replay_blob_id {
-                    player.replay_blob_id = Some(blob_id);
-                }
 
                 // Save updated player data
                 self.state.players.insert(&sender, player)?;

@@ -50,6 +50,7 @@ pub struct LeaderboardEntry {
     pub games_played: u32,
     pub last_played_at: Option<u64>,
     pub display_name: Option<String>,
+    pub replay_data: Option<String>,
 }
 
 /// GraphQL query root
@@ -75,6 +76,7 @@ impl QueryRoot {
                         games_played: player.games_played,
                         last_played_at: player.last_played_at,
                         display_name: player.display_name.clone(),
+                        replay_data: player.replay_data.clone(),
                     });
                 }
             }
@@ -96,6 +98,7 @@ impl QueryRoot {
                 games_played: player.games_played,
                 last_played_at: player.last_played_at,
                 display_name: player.display_name.clone(),
+                replay_data: player.replay_data.clone(),
             })
         } else {
             None
@@ -123,13 +126,14 @@ impl MutationRoot {
         &self,
         score: i32,
         timestamp: i32,
-        replay_blob_id: Option<String>,
+        replay_data: Option<String>,
     ) -> bool {
         // Note: In Linera, GraphQL mutations trigger contract operations
         // The actual operation is executed by the contract, not the service
         // This method just defines the GraphQL schema
         // The client calls backend.query("mutation { saveScore(...) }")
         // which creates a block with the SaveScore operation
+        // The replay_data is a JSON string of the game recording
         true
     }
 

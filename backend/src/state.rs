@@ -10,8 +10,11 @@ pub struct PlayerData {
     pub games_played: u32,
     /// Last time the player submitted a score (UNIX timestamp)
     pub last_played_at: Option<u64>,
-    /// Optional replay blob ID for anti-cheat verification
+    /// Optional replay blob ID for anti-cheat verification (when using blob storage)
     pub replay_blob_id: Option<String>,
+    /// Optional replay data stored directly (JSON string of recording)
+    /// This is a temporary solution until Linera blob storage is fully integrated
+    pub replay_data: Option<String>,
     /// Optional display name (if not set, shows wallet address)
     pub display_name: Option<String>,
 }
@@ -23,6 +26,7 @@ impl Default for PlayerData {
             games_played: 0,
             last_played_at: None,
             replay_blob_id: None,
+            replay_data: None,
             display_name: None,
         }
     }

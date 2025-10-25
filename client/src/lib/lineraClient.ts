@@ -187,7 +187,7 @@ class LineraClient {
   /**
    * Save score on-chain via GraphQL mutation
    */
-  async saveScore(score: number, replayBlobId?: string): Promise<boolean> {
+  async saveScore(score: number, replayData?: any): Promise<boolean> {
     if (!this.walletAddress) {
       throw new Error('Wallet not connected');
     }
@@ -195,16 +195,27 @@ class LineraClient {
     try {
       const timestamp = Math.floor(Date.now() / 1000);
 
+      // Serialize replay data to JSON string if provided
+      let replayDataJson: string | null = null;
+      if (replayData) {
+        try {
+          replayDataJson = JSON.stringify(replayData);
+          console.log('[lineraClient] Replay data serialized:', replayDataJson.length, 'bytes');
+        } catch (err) {
+          console.error('[lineraClient] Failed to serialize replay data:', err);
+        }
+      }
+
       if (this.backend) {
         // Use actual Linera backend - GraphQL mutation triggers contract operation
         const mutation = JSON.stringify({
-          query: `mutation SaveScore($score: Int!, $timestamp: Int!, $replayBlobId: String) {
-            saveScore(score: $score, timestamp: $timestamp, replayBlobId: $replayBlobId)
+          query: `mutation SaveScore($score: Int!, $timestamp: Int!, $replayData: String) {
+            saveScore(score: $score, timestamp: $timestamp, replayData: $replayData)
           }`,
           variables: {
             score,
             timestamp,
-            replayBlobId: replayBlobId || null
+            replayData: replayDataJson
           }
         });
 
