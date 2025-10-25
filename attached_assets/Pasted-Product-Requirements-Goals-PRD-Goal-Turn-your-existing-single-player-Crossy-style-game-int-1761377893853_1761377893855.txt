@@ -1,0 +1,558 @@
+Product Requirements & Goals (PRD)
+
+Goal
+
+Turn your existing single-player Crossy-style game into a real-time on-chain game that:
+
+Persists player identity and high scores on Linera microchains.
+
+What is Linera?
+
+Linera is the first real-time Layer-1 blockchain designed for the next generation of interactive, agentic applications. Its core innovation is the microchain — a lightweight, parallel chain assigned to each user or app. This architecture eliminates global bottlenecks, enabling instant finality, predictable scalability, and a Web3 experience that feels as fast as Web2.
+
+Linera’s architecture unlocks an entirely new design space. You can build apps that update live, scale linearly with users, and interact safely with AI agents — all while staying fully decentralized.
+
+Predictable Performance: No gas wars or congestion — your app runs at the same speed no matter how many users join.
+Agentic Integration: AI agents can transact directly via MCP/GraphQL without centralized intermediaries.
+
+Real-Time UX: Push updates instantly and deliver a smooth, interactive experience on-chain.
+Lets players sign in with a wallet and save high scores to-chain.
+Provides a real-time leaderboard and live spectate/view of other players’ scores.
+Keeps the game feel instantaneous (local simulation + optimistic updates), while guaranteeing integrity for persisted state.
+
+Non-Goals (for MVP)
+
+Fully trustless multiplayer physics (authoritative on-chain physics) — MVP will be single-player with on-chain persistence and live leaderboards. Later waves can add authoritative multiplayer or match-making microchains.
+
+Onchain asset economy (NFTs, tokens) — can add later.
+
+Success Criteria (Acceptance)
+
+Users can connect a Linera wallet, play the game, and submit a high score signed by their wallet.
+
+The onchain contract stores per-player high score & games_played, and a Linera service returns the sorted leaderboard.
+
+Frontend updates leaderboard in near-real-time after score submission and displays success/failure to user.
+
+Unit + integration tests exist for contract logic and the service.
+
+A reproducible local dev flow: build contract, start test service, run frontend against testnet or local chain.
+
+High-Level Architecture
+
+On-chain contract (Rust, Linera SDK)
+
+Stores PlayerData per wallet: high_score, games_played, optional last_played_timestamp, replay_blob_id (optional).
+
+Contract messages: SaveScore { score, optional_replay_blob_id }, RegisterPlayer { display_name? } (optional).
+
+Microchain per game instance OR per player (we’ll use per-player microchain for MVP — each player’s state is isolated to their microchain).
+
+Linera Service (Rust, Linera SDK)
+
+Read-only view that aggregates players for leaderboard queries and returns sorted top-N.
+
+Optional: compacted view for daily/weekly leaderboards.
+
+Frontend (React + existing Three.js game)
+
+Game UI + wallet connect (Linera wallet provider).
+
+Local game loop unchanged (Three.js). On game end: sign & dispatch SaveScore message to contract.
+
+Real-time leaderboard polling or using Linera GraphQL/MCP subscription (if available) for live updates.
+
+Optional Off-chain Service / Middleware
+
+For anti-cheat validation: a service that verifies replay_blob by replaying deterministic inputs and verifying score, or a simple analytics + fraud detection pipeline. Replay can be uploaded as a blob to Linera (blobs API) or to an off-chain store and referenced on-chain.
+
+CI/CD & Deploy
+
+Build & test contract on CI (cargo test + linera tests).
+
+Deploy contract to testnet via linera project deploy (scripted).
+
+Frontend builds and hosts (Netlify/Vercel) pointing to testnet endpoints.
+
+Data Model (on-chain)
+PlayerData
+
+wallet_address: String — implicit map key.
+
+high_score: u32 — best score.
+
+games_played: u32 — number of recorded games.
+
+last_played_at: Option<u64> — UNIX timestamp.
+
+replay_blob_id: Option<BlobId> — optional reference to replay for verification (small replay is ideal).
+
+Contract Messages
+
+SaveScore { score: u32, replay_blob_id: Option<String>, timestamp: u64 }
+
+RegisterPlayer { display_name: Option<String> }
+
+Service Query
+
+GetLeaderboard { top_n: Option<u32> } -> Vec<(wallet_address, high_score, last_played_at)>
+
+UX & Flow (User Stories)
+
+Onboarding / Wallet Connect
+
+User opens the site, clicks “Connect Wallet.”
+
+Connect with Linera wallet or injected wallet. Show wallet address shortened.
+
+Optionally allow user to set display name (RegisterPlayer).
+
+Play
+
+User plays the game locally (no on-chain latency). Game logic remains local and instant.
+
+Game Over
+
+Game shows score. Button: “Submit Score On-Chain”.
+
+When clicked:
+
+Optional: compute deterministic replay blob (list of player inputs + seed).
+
+Create transaction SaveScore signed by user's wallet and send to Linera contract.
+
+Optimistic UI: show "Saving..." then success / failure.
+
+On success, update local UI and refresh leaderboard.
+
+Leaderboard
+
+Leaderboard view displays top players from Linera service.
+
+Option to show “My Rank” by querying contract for player's position.
+
+Spectate / Live
+
+Optional: display a “recent plays” feed showing latest scores as they arrive via service or subscription.
+
+Implementation Plan — Step-by-Step Checklist
+
+I’ll list the implementation steps in order. For each step I include expected artifacts and verification checks.
+
+1) Project skeleton (artifact: repo with two subprojects)
+
+Create repo: crossy-chain/
+
+backend/ — Linera Rust contract + service
+
+frontend/ — React app containing current Three.js game
+
+scripts/ — build & deploy helpers
+
+README.md — steps to run locally
+
+Dev tasks
+
+linera project new inside backend or scaffold manually with Linera templates.
+
+Commit initial skeleton.
+
+Verify: cargo build in backend succeeds (even if contract is stubbed).
+
+2) Contract: design & implement state + messages (artifact: src/contract.rs)
+
+Implement PlayerData state and SaveScore handler.
+
+Behavior:
+
+Only signed sender may update their own score (use signer from runtime).
+
+If score > high_score then set high_score = score.
+
+Increment games_played.
+
+Optionally persist replay_blob_id and last_played_at.
+
+Add contract ABI (auto-generated or via annotations).
+
+Verify with tests:
+
+Unit test: sending SaveScore from signer updates their state.
+
+Unit test: lower score does not overwrite high score.
+
+3) Service: implement leaderboard view (artifact: src/service.rs)
+
+Implement service query returning top-N players sorted by high_score.
+
+Keep it read-only and fast (use in-memory aggregation or MapView iteration depending on view support).
+
+Expose pagination or top_n.
+
+Verify:
+
+Start service locally and query for leaderboard returning expected results after several mocked contract calls.
+
+4) Frontend scaffolding + wallet connect (artifact: frontend/src/wallet.tsx and provider)
+
+Transform existing site into React app, but keep Three.js rendering component for the game canvas (you can put Three.js script into a React component).
+
+Add wallet connector using Linera front-end SDK (docs: frontend/wallets.html).
+
+Provide UI button: Connect Wallet.
+
+Show wallet address, connect state.
+
+Important UI mapping
+
+Keep controls and counter UI; convert them into React state props to facilitate hook-based updates.
+
+Convert script.js into an importable module or React component that uses functions onGameOver(score) callback.
+
+Verify: Connect wallet; display address.
+
+5) Frontend integration with contract (artifact: frontend/src/lineraClient.js)
+
+Implement saveScore(score) calling Linera SDK Contract API: sign & submit SaveScore.
+
+Implement getLeaderboard(topN) calling Linera service query.
+
+Implement transaction spinner and error handling.
+
+Example (JS pseudo):
+
+import { Client, Contract } from "@linera/sdk";
+
+const client = new Client({ /* testnet config or local */});
+const contractId = "deployed-contract-id";
+
+export async function saveScore(score, replayBlobId=null) {
+  const contract = new Contract(client, contractId);
+  return contract.call("SaveScore", { score, replay_blob_id: replayBlobId, timestamp: Date.now() });
+}
+
+export async function getLeaderboard(top_n=10) {
+  const service = new Service(client, contractId);
+  return service.query({ top_n });
+}
+
+
+Verify: Call saveScore and check transaction accepted (testnet). Check getLeaderboard returns updated list.
+
+6) Local UX: optimistic update + failure handling
+
+When user submits score:
+
+Show optimistic success (e.g., "+score saved locally") but still report final status after chain response.
+
+On failure, notify user and optionally retry.
+
+Verify: Try forcing a failure (bad account or network) and ensure UX recovers.
+
+7) Anti-cheat baseline (artifact: anti-cheat design)
+
+Options (pick one or combine):
+
+Minimal (MVP): accept on-chain score but flag suspicious submissions for manual review. Use heuristic filters: extremely high scores in short time.
+
+Replay verification: Pack deterministic inputs (e.g., seed + input sequence) as a small blob and either store as Linera blob or off-chain and reference it; a verifier service replays inputs deterministically to ensure score is legitimate.
+
+Stateless challenge: For later waves, implement signed random seeds issued by a challenge server so that replay must match seed.
+
+Implementation advice: Implement minimal anti-cheat for MVP and include hooks for replay verification later.
+
+8) Tests
+
+Backend unit tests: contract logic, edge cases.
+
+Service tests: leaderboard sorting, pagination.
+
+Frontend integration tests: e2e (play a deterministic run, call saveScore, query service, assert presence).
+
+Security tests: ensure signer-only updates.
+
+Artifacts: test suite in CI.
+
+9) Deployment & Scripts
+
+Add scripts/deploy.sh:
+
+Build contract, produce ABI, call linera project deploy ... with wallet.
+
+Add scripts/start-local-chain.sh (if local chain available) or instructions for testnet.
+
+Frontend: build script npm run build and hosting settings for Netlify/Vercel.
+
+Verify: scripts/deploy.sh returns deployed contract ID.
+
+10) Monitoring & Observability
+
+Log contract events (use Linera logging features).
+
+Service exposes simple metrics: queries/sec, top-n caches.
+
+Add frontend error reporting (Sentry or simple in-house logger).
+
+Mapping your current files to new project
+
+index.html → frontend/public/index.html (React entry)
+
+style.css → frontend/src/styles/style.css (import into React)
+
+script.js (Three.js logic) → frontend/src/components/GameCanvas.jsx or GameComponent.tsx
+
+Wrap current game loop into React component lifecycle (useEffect) and expose onGameOver(score) prop that triggers saveScore.
+
+Key code change examples
+
+Replace document.getElementById("retry").addEventListener(...) with React event handlers.
+
+counterDOM.innerHTML = currentLane; → React state setLane(currentLane).
+
+Contract / Service API — Concrete Definitions
+Contract ABI (simplified)
+{
+  "messages": [
+    {"name":"SaveScore","args":[{"name":"score","type":"u32"},{"name":"replay_blob_id","type":"Option<String>"}]},
+    {"name":"RegisterPlayer","args":[{"name":"display_name","type":"Option<String>"}]}
+  ],
+  "views": [
+    {"name":"GetPlayer","returns":"PlayerData"},
+    {"name":"GetLeaderboard","returns":"Vec<(String,u32)>"}
+  ]
+}
+
+Example Contract Behavior (edge cases)
+
+If player sends SaveScore(0), ignore.
+
+If player sends SaveScore without signature, reject.
+
+Keep gas-cost awareness minimal (testnet), but document gas assumptions.
+
+Detailed Developer Tasks (checklist you can run through)
+
+Repo & setup
+
+ Create repo + backend/ + frontend/ subfolders
+
+ Add .gitignore, README.md with run instructions
+
+ Set up linera dev environment on your machine (Rust toolchain + linera cli). (Docs provided in your links.)
+
+Backend
+
+ Implement contract.rs with PlayerData, SaveScore.
+
+ Implement service.rs returning top-N leaderboard.
+
+ Add unit tests for both.
+
+ Create Cargo.toml entries & build scripts.
+
+Frontend
+
+ Convert index.html / Three.js code into React component.
+
+ Implement wallet connector using Linera SDK.
+
+ Implement lineraClient.js with saveScore, getLeaderboard.
+
+ Hook up UI flows: connect, play, submit, leaderboard refresh.
+
+Devops
+
+ Create scripts/deploy.sh for contract deployment to testnet.
+
+ Add CI pipeline (GitHub Actions) to build & test backend + frontend.
+
+ Configure hosting for frontend.
+
+Testing
+
+ Contract tests
+
+ Service tests
+
+ Frontend integration tests (playflow -> onchain state)
+
+ Anti-cheat regression/manual checks
+
+Deliverables
+
+Public GitHub repo meeting submission rules (README, deployment, demo link)
+
+Demo video or live demo link
+
+Changelog for waves
+
+Example flow: minimal code snippets
+
+(1) Contract (Rust) — SaveScore handler (pseudo)
+
+let sender = ctx.authenticated_signer().expect("must be signed");
+let mut player = self.state.players.get_mut(&sender).await.unwrap_or_default();
+if msg.score > *player.high_score.get() {
+    player.high_score.set(msg.score);
+}
+player.games_played.set(*player.games_played.get() + 1);
+player.last_played_at.set(Some(msg.timestamp));
+self.state.players.insert(sender, player).await;
+
+
+(2) Frontend: call to saveScore
+
+async function submitScore(score) {
+  try {
+    await lineraClient.saveScore(score, null);
+    // optimistic update
+    setLocalHighScore(Math.max(localHighScore, score));
+    refreshLeaderboard();
+    toast("Score saved on-chain ✅");
+  } catch (err) {
+    toast("Failed to save score on-chain: " + err.message);
+  }
+}
+
+
+(3) Frontend: wiring GameComponent
+
+Expose callback: <GameCanvas onGameOver={submitScore} />
+
+Security & Anti-cheat (detailed ideas)
+
+Signature & Auth — Only allow contract updates from authenticated signers (Linera runtime provides authenticated_signer()).
+
+Replay verification (recommended for next wave) — Collect deterministic input log: [timestamp, input] pairs. Submit hash on-chain; store replay blob via Linera blob endpoint or off-chain storage. Run verification job (service) to replay inputs and confirm score. If mismatch, flag or revert (depending on design).
+
+Rate limiting / spam protection — Limit frequency of SaveScore updates per player (contract can reject frequent updates by checking last_played_at). Prevent flooding.
+
+Heuristic detection — Mark obviously impossible runs (score too high too fast) for review — show warnings in leaderboard UI.
+
+Testing & QA Checklist (what to test)
+
+Contract:
+
+SaveScore increases games_played.
+
+SaveScore only updates high_score when new score is greater.
+
+Unauthenticated messages are rejected.
+
+Service:
+
+Leaderboard returns sorted results.
+
+Pagination works.
+
+Frontend:
+
+Connect wallet flow works end-to-end.
+
+Submit score shows correct optimistic + final state.
+
+UI gracefully handles failure.
+
+Integration:
+
+Full flow from play -> saveScore -> leaderboard update.
+
+Replay verification flow (if implemented).
+
+Deliverables & Documentation (what you should produce)
+
+README.md with:
+
+local dev setup
+
+deploy steps (how to get the contract id)
+
+how to connect wallet and run frontend
+
+backend/:
+
+src/contract.rs
+
+src/service.rs
+
+tests
+
+Cargo.toml
+
+frontend/:
+
+React project with GameCanvas component using your Three.js logic
+
+lineraClient.js
+
+wallet connector component
+
+scripts/:
+
+deploy.sh, start-local.sh
+
+Demo video (30–90s)
+
+Changelog (for wave-based resubmissions)
+
+Risks & Mitigation
+
+Latency / UX issues — Keep core gameplay fully local; only persist end-of-run summary (score) to chain to avoid interaction lag.
+
+Cheat / fraud — Implement replay verification / heuristics in second wave; for MVP use flagging system.
+
+Gas & Cost (when mainnet arrives) — Design for testnet first; keep writes compact; consider compression for replay blobs.
+
+Next practical steps (what to run now)
+
+Create repo and place your current index.html, style.css, script.js under frontend/ as a first commit.
+
+Scaffold a Linera backend in backend/ with linera project new.
+
+Implement a minimal SaveScore handler in the contract and unit tests.
+
+Convert the Three.js game to a React component and wire wallet connect + saveScore.
+
+Deploy to Linera testnet and test end-to-end.
+
+You Must Visit below link and Follow below resources to get more knowledge about Build on Linera
+
+https://linera.dev/developers/getting_started/installation.html
+https://linera.dev/developers/getting_started/hello_linera.html
+https://linera.dev/developers/core_concepts/microchains.html
+https://linera.dev/developers/core_concepts/wallets.html
+https://linera.dev/developers/core_concepts/node_service.html
+https://linera.dev/developers/core_concepts/applications.html
+https://linera.dev/developers/core_concepts/design_patterns.html
+
+https://linera.dev/developers/backend/creating_a_project.html
+https://linera.dev/developers/backend/state.html
+https://linera.dev/developers/backend/abi.html
+
+Getting started
+
+https://linera.dev/developers/backend/contract.html
+https://linera.dev/developers/backend/service.html
+https://linera.dev/developers/backend/deploy.html
+https://linera.dev/developers/backend/messages.html
+https://linera.dev/developers/backend/composition.html
+https://linera.dev/developers/backend/blobs.html
+https://linera.dev/developers/backend/logging.html
+https://linera.dev/developers/backend/testing.html
+
+Frontend Architecture Overview
+
+https://linera.dev/developers/frontend/overview.html
+https://linera.dev/developers/frontend/setup.html
+https://linera.dev/developers/frontend/interactivity.html
+https://linera.dev/developers/frontend/wallets.html
+
+Contract Finalization
+
+https://linera.dev/developers/advanced_topics/contract_finalize.html
+https://linera.dev/developers/advanced_topics/validators.html
+https://linera.dev/developers/advanced_topics/block_creation.html
+https://linera.dev/developers/advanced_topics/assets.html
+
+
+Your Goal is Rebuild Fully Complete working Game using on Linera SDKs and protocol features used
