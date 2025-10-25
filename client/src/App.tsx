@@ -4,13 +4,14 @@ import { WalletConnect } from './components/WalletConnect';
 import { GameUI } from './components/GameUI';
 import { Leaderboard } from './components/Leaderboard';
 import { ConnectionStatus } from './components/ConnectionStatus';
+import { ReplayViewer } from './components/ReplayViewer';
 import { lineraClient } from './lib/lineraClient';
 import { toast } from 'sonner';
 import { Toaster } from './components/ui/sonner';
 import type { GameRecording } from './lib/GameInputRecorder';
 import "@fontsource/inter";
 
-type GameState = 'menu' | 'playing' | 'gameover' | 'leaderboard';
+type GameState = 'menu' | 'playing' | 'gameover' | 'leaderboard' | 'replay';
 
 function App() {
   const [gameState, setGameState] = useState<GameState>('menu');
@@ -19,6 +20,7 @@ function App() {
   const [submittingScore, setSubmittingScore] = useState(false);
   const [gameKey, setGameKey] = useState(0);
   const [currentRecording, setCurrentRecording] = useState<GameRecording | null>(null);
+  const [replayWalletAddress, setReplayWalletAddress] = useState<string | null>(null);
 
   // Load Press Start 2P font
   useEffect(() => {
@@ -126,6 +128,16 @@ function App() {
     setGameState('leaderboard');
   };
 
+  const handleWatchReplay = (walletAddress: string) => {
+    setReplayWalletAddress(walletAddress);
+    setGameState('replay');
+  };
+
+  const handleBackFromReplay = () => {
+    setReplayWalletAddress(null);
+    setGameState('leaderboard');
+  };
+
   const handleCloseLeaderboard = () => {
     setGameState('menu');
   };
@@ -167,6 +179,15 @@ function App() {
         <Leaderboard
           onClose={handleCloseLeaderboard}
           currentWallet={walletAddress}
+          onWatchReplay={handleWatchReplay}
+        />
+      )}
+
+      {/* Replay Viewer */}
+      {gameState === 'replay' && replayWalletAddress && (
+        <ReplayViewer
+          walletAddress={replayWalletAddress}
+          onBack={handleBackFromReplay}
         />
       )}
 

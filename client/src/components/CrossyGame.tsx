@@ -7,9 +7,17 @@ interface CrossyGameProps {
   onGameOver: (score: number, recording?: GameRecording) => void;
   onScoreChange: (score: number) => void;
   enableRecording?: boolean;
+  replayMode?: boolean;
+  replayData?: GameRecording;
 }
 
-export function CrossyGame({ onGameOver, onScoreChange, enableRecording = true }: CrossyGameProps) {
+export function CrossyGame({ 
+  onGameOver, 
+  onScoreChange, 
+  enableRecording = true,
+  replayMode = false,
+  replayData 
+}: CrossyGameProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameStateRef = useRef<any>(null);
   const recorderRef = useRef<GameInputRecorder>(new GameInputRecorder());
@@ -18,8 +26,11 @@ export function CrossyGame({ onGameOver, onScoreChange, enableRecording = true }
     if (!containerRef.current) return;
 
     // Initialize seeded RNG for deterministic gameplay
-    const gameSeed = Date.now();
+    // In replay mode, use the recorded seed; otherwise use current time
+    const gameSeed = replayMode && replayData ? replayData.seed : Date.now();
     const rng = new SeededRandom(gameSeed);
+    
+    console.log('[Game] Initializing with seed:', gameSeed, replayMode ? '(REPLAY)' : '(LIVE)');
 
     // Game constants
     const zoom = 2;
@@ -430,13 +441,49 @@ export function CrossyGame({ onGameOver, onScoreChange, enableRecording = true }
       dirLight.position.x = initialDirLightPositionX;
       dirLight.position.y = initialDirLightPositionY;
 
-      // Start recording if enabled
-      if (enableRecording) {
+      // Start recording if enabled (only in live mode)
+      if (enableRecording && !replayMode) {
         // Use the same seed for both recording and RNG to ensure deterministic replay
         rng.reset(gameSeed);
         recorderRef.current.start(gameSeed);
         console.log('[Game] Recording started with seed:', gameSeed);
       }
+      
+      // Note: Replay playback will be started in a useEffect after gameStateRef is assigned
+    };
+
+    // Replay playback system
+    const startReplayPlayback = () => {
+      if (!replayData || !gameStateRef.current) return;
+      
+      console.log('[Game] Starting replay playback:', replayData.inputs.length, 'inputs');
+      
+      const startTime = Date.now();
+      let currentInputIndex = 0;
+      
+      const playbackInterval = setInterval(() => {
+        if (currentInputIndex >= replayData.inputs.length) {
+          clearInterval(playbackInterval);
+          console.log('[Game] Replay playback complete');
+          return;
+        }
+        
+        const elapsedTime = Date.now() - startTime;
+        const currentInput = replayData.inputs[currentInputIndex];
+        
+        // Check if it's time to play this input
+        if (elapsedTime >= currentInput.timestamp) {
+          // Execute the recorded move
+          if (gameStateRef.current && gameStateRef.current.move) {
+            gameStateRef.current.move(currentInput.direction);
+            console.log('[Replay] Playing input:', currentInput.direction, 'at', elapsedTime, 'ms');
+          }
+          currentInputIndex++;
+        }
+      }, 16); // Check every ~60fps
+      
+      // Store interval ID for cleanup
+      return () => clearInterval(playbackInterval);
     };
 
     initializeValues();
@@ -504,7 +551,10 @@ export function CrossyGame({ onGameOver, onScoreChange, enableRecording = true }
       else if (event.key === "ArrowRight" || event.key === "d") move("right");
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    // Only attach keyboard listener in live mode, not in replay mode
+    if (!replayMode) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
 
     // Animation loop
     function animate(timestamp: number) {
@@ -641,6 +691,14 @@ export function CrossyGame({ onGameOver, onScoreChange, enableRecording = true }
     // Store game state for external control
     gameStateRef.current = { move, initializeValues };
 
+    // Start replay playback after gameStateRef is assigned (only in replay mode)
+    // This is done here instead of in initializeValues() because we need gameStateRef.current.move to exist
+    let replayCleanup: (() => void) | undefined;
+    if (replayMode && replayData) {
+      console.log('[Game] Starting replay playback after gameStateRef assignment');
+      replayCleanup = startReplayPlayback();
+    }
+
     // Cleanup
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
@@ -648,8 +706,13 @@ export function CrossyGame({ onGameOver, onScoreChange, enableRecording = true }
         containerRef.current.removeChild(renderer.domElement);
       }
       renderer.dispose();
+      
+      // Cleanup replay playback interval
+      if (replayCleanup) {
+        replayCleanup();
+      }
     };
-  }, [onGameOver, onScoreChange]);
+  }, [onGameOver, onScoreChange, replayMode, replayData]);
 
   return (
     <div

@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { lineraClient, type LeaderboardEntry } from '@/lib/lineraClient';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { Play } from 'lucide-react';
 
 interface LeaderboardProps {
   onClose: () => void;
   currentWallet?: string | null;
+  onWatchReplay?: (walletAddress: string) => void;
 }
 
-export function Leaderboard({ onClose, currentWallet }: LeaderboardProps) {
+export function Leaderboard({ onClose, currentWallet, onWatchReplay }: LeaderboardProps) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -135,6 +137,21 @@ export function Leaderboard({ onClose, currentWallet }: LeaderboardProps) {
                     </div>
                     <div className="text-xs text-gray-500">high score</div>
                   </div>
+
+                  {/* Watch Replay Button */}
+                  {entry.replay_data && onWatchReplay && (
+                    <div className="flex-shrink-0 ml-2">
+                      <Button
+                        onClick={() => onWatchReplay(entry.wallet_address)}
+                        size="sm"
+                        variant="outline"
+                        className="bg-blue-50 hover:bg-blue-100 border-blue-300"
+                      >
+                        <Play className="h-4 w-4 mr-1" />
+                        Watch
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })}

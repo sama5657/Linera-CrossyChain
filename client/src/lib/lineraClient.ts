@@ -6,6 +6,7 @@ export interface LeaderboardEntry {
   games_played: number;
   last_played_at?: number;
   display_name?: string;
+  replay_data?: string;
 }
 
 export interface PlayerData {
@@ -13,6 +14,7 @@ export interface PlayerData {
   games_played: number;
   last_played_at?: number;
   display_name?: string;
+  replay_data?: string;
 }
 
 class LineraClient {
@@ -279,6 +281,7 @@ class LineraClient {
               games_played
               last_played_at
               display_name
+              replay_data
             }
           }`
         });
@@ -340,6 +343,7 @@ class LineraClient {
               games_played
               last_played_at
               display_name
+              replay_data
             }
           }`
         });
