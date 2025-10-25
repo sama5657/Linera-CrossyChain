@@ -1,8 +1,6 @@
-# Crossy Chain 🐔⛓️
+# Crossy Chain
 
 A fully on-chain Crossy Road-style game built with **Linera blockchain** and **Three.js**. Players connect their Linera wallet, play the classic lane-crossing game, and submit their high scores directly to the blockchain for real-time leaderboards.
-
-![Crossy Chain Demo](https://i.ibb.co/M6KTWnf/pic.jpg)
 
 ## 🎮 Features
 
