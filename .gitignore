@@ -1,0 +1,21 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Linera specific
+backend/target/
+backend/Cargo.lock
+.linera/
+wallet.json
+keystore.json
+.linera-network.pid
+contract-id.txt
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+migrations/
