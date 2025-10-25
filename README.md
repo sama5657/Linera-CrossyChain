@@ -242,15 +242,14 @@ MIT License - see [LICENSE](LICENSE) for details
 
 ## 🙏 Acknowledgments
 
-- Original Crossy Road game inspiration
 - Linera team for the amazing blockchain platform
 - Three.js community for 3D rendering tools
 
 ## 📞 Support
 
 - [Linera Documentation](https://linera.dev)
-- [GitHub Issues](your-repo/issues)
-- [Discord Community](your-discord-link)
+- [GitHub Issues](https://github.com/sama5657/Linera-CrossyChain)
+- [Discord Community](https://discord.com/invite/linera)
 
 ---
 
