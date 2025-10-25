@@ -5,12 +5,14 @@ export interface LeaderboardEntry {
   high_score: number;
   games_played: number;
   last_played_at?: number;
+  display_name?: string;
 }
 
 export interface PlayerData {
   high_score: number;
   games_played: number;
   last_played_at?: number;
+  display_name?: string;
 }
 
 class LineraClient {
@@ -119,6 +121,70 @@ class LineraClient {
   }
 
   /**
+   * Register player with optional display name
+   */
+  async registerPlayer(displayName?: string): Promise<boolean> {
+    if (!this.walletAddress) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      if (this.backend) {
+        // Use actual Linera backend with proper GraphQL variables
+        const mutation = JSON.stringify({
+          query: `mutation RegisterPlayer($displayName: String) {
+            registerPlayer(displayName: $displayName)
+          }`,
+          variables: {
+            displayName: displayName || null
+          }
+        });
+
+        const response = await this.backend.query(mutation);
+        const data = JSON.parse(response);
+        console.log('Player registered:', data);
+        
+        if (data.errors) {
+          console.error('GraphQL errors:', data.errors);
+          throw new Error(data.errors[0].message);
+        }
+        
+        // Check if mutation actually succeeded
+        if (data.data?.registerPlayer !== true) {
+          console.error('Registration failed - mutation returned false or undefined');
+          throw new Error('Display name validation failed');
+        }
+        
+        return true;
+      } else {
+        // Fallback to localStorage for development
+        console.warn('Using localStorage fallback - no Linera backend connected');
+        const storageKey = `linera_player_${this.walletAddress}`;
+        const existingData = localStorage.getItem(storageKey);
+        let playerData: PlayerData = {
+          high_score: 0,
+          games_played: 0,
+          display_name: displayName
+        };
+
+        if (existingData) {
+          const existing = JSON.parse(existingData);
+          playerData = {
+            ...existing,
+            display_name: displayName
+          };
+        }
+
+        localStorage.setItem(storageKey, JSON.stringify(playerData));
+        return true;
+      }
+    } catch (error) {
+      console.error('Failed to register player:', error);
+      return false;
+    }
+  }
+
+  /**
    * Save score on-chain via GraphQL mutation
    */
   async saveScore(score: number, replayBlobId?: string): Promise<boolean> {
@@ -132,9 +198,14 @@ class LineraClient {
       if (this.backend) {
         // Use actual Linera backend - GraphQL mutation triggers contract operation
         const mutation = JSON.stringify({
-          query: `mutation {
-            save_score(score: ${score}, timestamp: ${timestamp}${replayBlobId ? `, replay_blob_id: "${replayBlobId}"` : ''})
-          }`
+          query: `mutation SaveScore($score: Int!, $timestamp: Int!, $replayBlobId: String) {
+            saveScore(score: $score, timestamp: $timestamp, replayBlobId: $replayBlobId)
+          }`,
+          variables: {
+            score,
+            timestamp,
+            replayBlobId: replayBlobId || null
+          }
         });
 
         const response = await this.backend.query(mutation);
@@ -144,6 +215,12 @@ class LineraClient {
         if (data.errors) {
           console.error('GraphQL errors:', data.errors);
           throw new Error(data.errors[0].message);
+        }
+        
+        // Check if mutation actually succeeded
+        if (data.data?.saveScore !== true) {
+          console.error('Save score failed - mutation returned false or undefined');
+          throw new Error('Score validation failed');
         }
         
         return true;
@@ -190,6 +267,7 @@ class LineraClient {
               high_score
               games_played
               last_played_at
+              display_name
             }
           }`
         });
@@ -218,7 +296,8 @@ class LineraClient {
                 wallet_address: walletAddress,
                 high_score: data.high_score,
                 games_played: data.games_played,
-                last_played_at: data.last_played_at
+                last_played_at: data.last_played_at,
+                display_name: data.display_name
               });
             }
           }
@@ -249,6 +328,7 @@ class LineraClient {
               high_score
               games_played
               last_played_at
+              display_name
             }
           }`
         });

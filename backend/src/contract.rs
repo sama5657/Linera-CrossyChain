@@ -32,6 +32,10 @@ pub enum Operation {
         replay_blob_id: Option<String>,
         timestamp: u64,
     },
+    /// Register a player with optional display name
+    RegisterPlayer {
+        display_name: Option<String>,
+    },
 }
 
 /// Contract errors
@@ -119,6 +123,38 @@ impl Contract for CrossyChainContract {
 
                 Ok(())
             }
+            Operation::RegisterPlayer { display_name } => {
+                // Get the authenticated signer (wallet address)
+                let sender = match self.runtime.authenticated_signer() {
+                    Some(owner) => owner.to_string(),
+                    None => return Err(ContractError::Unauthorized),
+                };
+
+                // Get or create player data
+                let mut player = self
+                    .state
+                    .players
+                    .get(&sender)
+                    .await?
+                    .unwrap_or_default();
+
+                // Validate and update display name if provided
+                if let Some(name) = display_name {
+                    let trimmed = name.trim();
+                    if !trimmed.is_empty() && trimmed.len() <= 30 {
+                        player.display_name = Some(trimmed.to_string());
+                    }
+                    // If validation fails, keep existing display name
+                } else {
+                    // Explicitly setting to None clears the display name
+                    player.display_name = None;
+                }
+
+                // Save updated player data
+                self.state.players.insert(&sender, player)?;
+
+                Ok(())
+            }
         }
     }
 
@@ -169,9 +205,36 @@ impl Contract for CrossyChainContract {
 
                 Ok(())
             }
-            Message::RegisterPlayer { display_name: _ } => {
-                // For MVP, we just use wallet addresses
-                // Display names can be stored in a future version
+            Message::RegisterPlayer { display_name } => {
+                // Get the authenticated signer (wallet address)
+                let sender = match self.runtime.authenticated_signer() {
+                    Some(owner) => owner.to_string(),
+                    None => return Err(ContractError::Unauthorized),
+                };
+
+                // Get or create player data
+                let mut player = self
+                    .state
+                    .players
+                    .get(&sender)
+                    .await?
+                    .unwrap_or_default();
+
+                // Validate and update display name if provided
+                if let Some(name) = display_name {
+                    let trimmed = name.trim();
+                    if !trimmed.is_empty() && trimmed.len() <= 30 {
+                        player.display_name = Some(trimmed.to_string());
+                    }
+                    // If validation fails, keep existing display name
+                } else {
+                    // Explicitly setting to None clears the display name
+                    player.display_name = None;
+                }
+
+                // Save updated player data
+                self.state.players.insert(&sender, player)?;
+
                 Ok(())
             }
         }

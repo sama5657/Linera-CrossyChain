@@ -12,6 +12,8 @@ pub struct PlayerData {
     pub last_played_at: Option<u64>,
     /// Optional replay blob ID for anti-cheat verification
     pub replay_blob_id: Option<String>,
+    /// Optional display name (if not set, shows wallet address)
+    pub display_name: Option<String>,
 }
 
 impl Default for PlayerData {
@@ -21,6 +23,7 @@ impl Default for PlayerData {
             games_played: 0,
             last_played_at: None,
             replay_blob_id: None,
+            display_name: None,
         }
     }
 }

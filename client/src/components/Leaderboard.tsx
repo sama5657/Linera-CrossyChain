@@ -95,16 +95,34 @@ export function Leaderboard({ onClose, currentWallet }: LeaderboardProps) {
                   {/* Player Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm text-gray-700 truncate">
-                        {shortenAddress(entry.wallet_address)}
-                      </span>
-                      {isCurrentUser && (
-                        <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                          You
-                        </span>
+                      {entry.display_name ? (
+                        <>
+                          <span className="font-bold text-gray-800 truncate">
+                            {entry.display_name}
+                          </span>
+                          {isCurrentUser && (
+                            <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded">
+                              You
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-mono text-sm text-gray-700 truncate">
+                            {shortenAddress(entry.wallet_address)}
+                          </span>
+                          {isCurrentUser && (
+                            <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded">
+                              You
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
+                      {entry.display_name && (
+                        <span className="font-mono opacity-60">{shortenAddress(entry.wallet_address)} • </span>
+                      )}
                       {entry.games_played} {entry.games_played === 1 ? 'game' : 'games'} played
                       {entry.last_played_at && ` • Last played ${formatDate(entry.last_played_at)}`}
                     </div>

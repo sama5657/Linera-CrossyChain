@@ -49,6 +49,7 @@ pub struct LeaderboardEntry {
     pub high_score: u32,
     pub games_played: u32,
     pub last_played_at: Option<u64>,
+    pub display_name: Option<String>,
 }
 
 /// GraphQL query root
@@ -73,6 +74,7 @@ impl QueryRoot {
                         high_score: player.high_score,
                         games_played: player.games_played,
                         last_played_at: player.last_played_at,
+                        display_name: player.display_name.clone(),
                     });
                 }
             }
@@ -93,6 +95,7 @@ impl QueryRoot {
                 high_score: player.high_score,
                 games_played: player.games_played,
                 last_played_at: player.last_played_at,
+                display_name: player.display_name.clone(),
             })
         } else {
             None
@@ -127,6 +130,29 @@ impl MutationRoot {
         // This method just defines the GraphQL schema
         // The client calls backend.query("mutation { saveScore(...) }")
         // which creates a block with the SaveScore operation
+        true
+    }
+
+    /// Register a player with optional display name
+    /// This triggers the RegisterPlayer operation in the contract
+    async fn register_player(&self, display_name: Option<String>) -> bool {
+        // Validate display name if provided
+        if let Some(ref name) = display_name {
+            // Limit display name length
+            if name.len() > 30 {
+                return false;
+            }
+            // Ensure it's not empty or just whitespace
+            if name.trim().is_empty() {
+                return false;
+            }
+        }
+        
+        // Note: In Linera, GraphQL mutations trigger contract operations
+        // The actual operation is executed by the contract, not the service
+        // This method just defines the GraphQL schema
+        // The client calls backend.query("mutation { registerPlayer(...) }")
+        // which creates a block with the RegisterPlayer operation
         true
     }
 }
